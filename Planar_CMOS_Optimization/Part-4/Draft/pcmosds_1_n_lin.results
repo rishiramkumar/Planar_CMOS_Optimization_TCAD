@@ -1,0 +1,32 @@
+index: 1
+device: n
+bias: lin
+
+structure width: 0.08
+workfunction: 4.4
+contact resistance: 1e-10
+lifetime n0: 1e-10
+lifetime p0: 1e-10
+threshold current: 1e-07*1
+drain bias: 0.05*1
+minimum gate voltage: -0.3*1
+maximum gate voltage: 1.2*1
+drain bias step: 0.1
+gate bias step: 0.1
+gate ramp step: 0.02
+
+start: Wed Oct 29 01:55:13 UTC 2025
+
+Vth_[V]=4.0091887885516680e-01 
+
+Id_[uA/um]=1.1635151512442576e+02 
+
+Ileak_[nA/um]=2.5048092239373237e-03 
+
+slope=1.1279612468609338e+01 
+
+ss_[mV/dec]=8.8655528085114241e+01 
+
+vtgmax=5.7764502889907132e-01 
+
+end: Wed Oct 29 01:56:18 UTC 2025

@@ -1,0 +1,932 @@
+# This deck creates half structures for both the nmos and pmos devices.
+# Original structure from Peter Griffin of Stanford University.
+
+# process portion creates a sequence of structure files of the form:
+#   <output_root>_<index>_<suffix>.str , 
+#     where <suffix> is initially set to be ascending integers
+#   and sv_<output_root>_<index>_<lp>.<vp_suffix> files,
+#     where <lp> is the load point identifiers listed below,
+#     and <vp_suffix> is determined by victory process (svf, dop, etc)
+#   process inputs stored in <output_root>_<index>_<suffix>_process.results
+#   final process output for meshing is stored in
+#     <output_root>_<index>_final.<vp_suffix> files
+
+# device portion creates four output files with extracted statistics:
+#     <output_root>_<index>_<device>_<bias>.results
+#   and iv-characteristic files of the form
+#     <output_root>_<index>_<device>_<bias>.log
+#     <output_root>_<index>_<device>_<bias>.dat
+#   where <device> is "n" or "p"
+#     and <bias> is "lin" or "sat"
+# device portion also creates str files of the form
+#   <output_root>_<index>_<device>_meshed.str (remeshed representations)
+#   <output_root>_<index>_<device>_<bias>_vg0.str (with iv output, gate=0)
+#   <output_root>_<index>_<device>_<bias>_vgmax.str (with iv output, gate=max)
+
+##### user input #####
+
+# baseline planar 28nm shallow device flow; 30nm isolation, 140nm N-P pitch
+set output_root="pcmos"
+
+set index=1
+
+set run_process=1        # victory process
+# these two flags only have effect if run_process is set
+set mc_implant=0         # use monte carlo implants for deep wells and halos
+set record_settings=1
+
+set run_iv_nmos=0        # victory mesh and victory process for nmos
+set run_iv_pmos=0        # victory mesh and victory process for pmos
+# these two flags only have effect if run_iv_nmos or run_iv_pmos is set
+set run_iv_linear=1      # bias point within victory device
+set run_iv_saturation=1  # bias point within victory device
+
+# load points in this file:
+#   1: stiliner
+#   2: sti
+#   3: well
+#   4: vt
+#   5: polyreox
+#   6: flash
+#   7: sd
+#   8: highk
+
+set load_point=0
+
+# if run_process=1 with load_point set to other than zero,
+#   set load_file to NONE to use load file from load-point sequence
+#   for present index, or set load_file to other file name to use
+#   an existing file from a different index,
+#     e.g., <output_root>_<index>_<suffix>
+#     file suffix (e.g., .str, .svf) is not necessary
+# load_file has no effect if load_point=0
+
+set load_file="NONE"
+
+# mc_n_ions has effect only if both run_process and mc_implant are set
+set mc_n_ions=2e6
+
+# geometry parameters
+set z_depth = 0.2
+set z_height = 0.3
+set poly_width = 0.028
+set iso_width = 0.03
+set iso_to_poly_width = 0.041
+set nisi_to_iso_width = 0.005
+set well_overlap = 0.00
+
+# extraction parameters
+set z_channel_offset = 0.0005
+set z_halo_depth = 0.012
+
+# process parameters
+set sti_depth=0.035
+set sti_angle=85
+set t_ox_implant = 0.003
+set t_gox_sac = 0.001
+set t_ox_poly = 0.002
+set t_gox_sio2 = 0.001 # ald initiation layer
+set t_gox_hfo2 = 0.002 # high-k thickness
+set t_tin = 0.002 # TiN thickness (first layer)
+set t_nit_spacer = 0.010
+set t_nit_spacer_oe = 0.005
+set pwell_energy = 4
+set pwell_dose = 7e12
+set nvt_energy = 4
+set nvt_dose = 6.9e12
+set nwell_energy = 10
+set nwell_dose = 6.3e12
+set pvt_energy = 10
+set pvt_dose = 2.4e12
+set nhalo_energy = 3
+set nhalo_dose = 1.4e13
+set phalo_energy = 8
+set phalo_dose = 1.8e13
+set next_energy = 1.2
+set next_dose = 1e15
+set pext_energy = 1.4
+set pext_dose = 2e14
+set nsd_energy = 3
+set nsd_dose = 3e15
+set psd_energy = 2
+set psd_dose = 7e15
+set well_diff_temp = 1000
+set well_diff_time = 14
+set ext_diff_temp = 1000
+set ext_diff_time = 20e-3
+set sd_diff_temp = 1000
+set sd_diff_time = 20e-3
+
+# device parameters
+set iv_structure_width=0.08
+set n_wf = 4.4
+set p_wf = 5.0
+set vdd = 1.2
+set vlin = 0.05
+set vgmin = -0.3
+set n_ivt = 100e-9
+set p_ivt = 100e-9
+set n_rcont = 1e-10
+set p_rcont = 1e-10
+set taun = 1e-10
+set taup = 1e-10
+set drain_bias_step=0.1
+set gate_bias_step=0.1
+set gate_ramp_step=0.02
+
+##### user input #####
+
+##### start general parameters #####
+# parameters used by both process and device (mesh)
+
+set x_min=-1*(0.5*$iso_width+$iso_to_poly_width+0.5*$poly_width)
+set x_max=0.5*$iso_width+$iso_to_poly_width+0.5*$poly_width
+
+##### end general parameters #####
+
+##### start process #####
+
+if cond=($run_process=1)
+
+set vp_resfile="$'output_root'_$'index'_process.results"
+system rm -f $vp_resfile results.final
+
+if cond=($record_settings=1)
+
+system echo "output root: $output_root" >> $vp_resfile
+system echo "index: $index" >> $vp_resfile
+system echo "load point: $load_point" >> $vp_resfile
+if cond=($load_point=0)
+  system echo "load file: N/A" >> $vp_resfile
+else
+  system echo "load file: $load_file" >> $vp_resfile
+if.end
+if cond=($mc_implant=0)
+  system echo "mc_implant n.ions: N/A" >> $vp_resfile
+else
+  system echo "mc_implant n.ions: $mc_implant" >> $vp_resfile
+if.end
+system echo >> $vp_resfile
+system echo "z_depth: $z_depth" >> $vp_resfile
+system echo "z_height: $z_height" >> $vp_resfile
+system echo "z_channel_offset: $z_channel_offset" >> $vp_resfile
+system echo "z_halo_depth: $z_halo_depth" >> $vp_resfile
+system echo "poly_width: $poly_width" >> $vp_resfile
+system echo "iso_width: $iso_width" >> $vp_resfile
+system echo "iso_to_poly_width: $iso_to_poly_width" >> $vp_resfile
+system echo "nisi_to_iso_width: $nisi_to_iso_width" >> $vp_resfile
+system echo "well_overlap: $well_overlap" >> $vp_resfile
+system echo "sti_depth: $sti_depth" >> $vp_resfile
+system echo "sti_angle: $sti_angle" >> $vp_resfile
+system echo "t_ox_implant: $t_ox_implant" >> $vp_resfile
+system echo "t_gox_sac: $t_gox_sac" >> $vp_resfile
+system echo "t_ox_poly: $t_ox_poly" >> $vp_resfile
+system echo "t_gox_sio2: $t_gox_sio2" >> $vp_resfile
+system echo "t_gox_hfo2: $t_gox_hfo2" >> $vp_resfile
+system echo "t_tin: $t_tin" >> $vp_resfile
+system echo "t_nit_spacer: $t_nit_spacer" >> $vp_resfile
+system echo "t_nit_spacer_oe: $t_nit_spacer_oe" >> $vp_resfile
+system echo "pwell_energy: $pwell_energy" >> $vp_resfile
+system echo "pwell_dose: $pwell_dose" >> $vp_resfile
+system echo "nvt_energy: $nvt_energy" >> $vp_resfile
+system echo "nvt_dose: $nvt_dose" >> $vp_resfile
+system echo "nwell_energy: $nwell_energy" >> $vp_resfile
+system echo "nwell_dose: $nwell_dose" >> $vp_resfile
+system echo "pvt_energy: $pvt_energy" >> $vp_resfile
+system echo "pvt_dose: $pvt_dose" >> $vp_resfile
+system echo "nhalo_energy: $nhalo_energy" >> $vp_resfile
+system echo "nhalo_dose: $nhalo_dose" >> $vp_resfile
+system echo "phalo_energy: $phalo_energy" >> $vp_resfile
+system echo "phalo_dose: $phalo_dose" >> $vp_resfile
+system echo "next_energy: $next_energy" >> $vp_resfile
+system echo "next_dose: $next_dose" >> $vp_resfile
+system echo "pext_energy: $pext_energy" >> $vp_resfile
+system echo "pext_dose: $pext_dose" >> $vp_resfile
+system echo "nsd_energy: $nsd_energy" >> $vp_resfile
+system echo "nsd_dose: $nsd_dose" >> $vp_resfile
+system echo "psd_energy: $psd_energy" >> $vp_resfile
+system echo "psd_dose: $psd_dose" >> $vp_resfile
+system echo "well_diff_temp: $well_diff_temp" >> $vp_resfile
+system echo "well_diff_time: $well_diff_time" >> $vp_resfile
+system echo "ext_diff_temp: $ext_diff_temp" >> $vp_resfile
+system echo "ext_diff_time: $ext_diff_time (seconds)" >> $vp_resfile
+system echo "sd_diff_temp: $sd_diff_temp" >> $vp_resfile
+system echo "sd_diff_time: $sd_diff_time (seconds)" >> $vp_resfile
+system echo >> $vp_resfile
+system echo -n "start: " >> $vp_resfile
+system date >> $vp_resfile
+system echo >> $vp_resfile
+
+if.end # record_settings
+
+go victoryprocess simflags="-P 4"
+
+if cond=($load_point = 0)
+
+init material="silicon" sub.rot=45 dopants=boron dopingvalues=1e15 \
+  from=$x_min to=$x_max depth=$z_depth gasheight=$z_height \
+  resolution=0.005 meshdepth=3 flow.dim=2d_xz at=0
+
+# arbitrary mask enclosure of simulated region, in both x and y
+set mask_overlap=0.01
+
+set x_mask_min=-1*($x_max+$mask_overlap)
+set x_mask_max=$x_max+$mask_overlap
+set y_mask_min=-1*$mask_overlap
+set y_mask_size=2*$mask_overlap
+
+set x_active1_min=$x_mask_min
+set x_active2_min=0.5*$iso_width
+set active_mask_width=$x_max-0.5*$iso_width+$mask_overlap
+specifymaskpoly mask="active1" \
+  rect lb=$x_active1_min,$y_mask_min size=$active_mask_width,$y_mask_size
+specifymaskpoly mask="active2" \
+  rect lb=$x_active2_min,$y_mask_min size=$active_mask_width,$y_mask_size
+specifymaskpoly newmask="active" mask1=active1 or mask2=active2
+
+set x_well1_min=$x_mask_min
+set x_well2_min=-1*$well_overlap
+set well_mask_width=$x_mask_max+$well_overlap
+specifymaskpoly mask="nwell" rect lb=$x_well1_min,$y_mask_min size=$well_mask_width,$y_mask_size
+specifymaskpoly mask="pwell" rect lb=$x_well2_min,$y_mask_min size=$well_mask_width,$y_mask_size
+
+set x_gate1_min=$x_mask_min
+set x_gate2_min=$x_max-0.5*$poly_width
+set gate_mask_width=0.5*$poly_width+$mask_overlap
+specifymaskpoly mask="gate1" rect lb=$x_gate1_min,$y_mask_min size=$gate_mask_width,$y_mask_size
+specifymaskpoly mask="gate2" rect lb=$x_gate2_min,$y_mask_min size=$gate_mask_width,$y_mask_size
+specifymaskpoly newmask="gate" mask1=gate1 or mask2=gate2
+
+# set the volume mesh
+
+set n_gate_edge=$x_min+0.5*$poly_width
+set p_gate_edge=$x_max-0.5*$poly_width
+set n_sti_edge=$x_min+0.5*$poly_width+$iso_to_poly_width
+set p_sti_edge=$x_max-0.5*$poly_width-$iso_to_poly_width
+
+set z_min=-1*$z_height
+set z_sti=$sti_depth+0.005
+set z_mid=0.5*($z_depth-$sti_depth)+$sti_depth
+
+# x-planes
+line x loc=$x_min spac=0.0015
+line x loc=$n_gate_edge-0.003 spac=0.00025
+line x loc=$n_gate_edge+0.003 spac=0.00025
+line x loc=$n_gate_edge+0.01 spac=0.002
+line x loc=$n_sti_edge-0.01 spac=0.002
+line x loc=$n_sti_edge-0.005 spac=0.001
+line x loc=$n_sti_edge+0.012 spac=0.001
+line x loc=0 spac=0.002
+line x loc=$p_sti_edge-0.012 spac=0.001
+line x loc=$p_sti_edge+0.005 spac=0.001
+line x loc=$p_sti_edge+0.01 spac=0.002
+line x loc=$p_gate_edge-0.01 spac=0.002
+line x loc=$p_gate_edge-0.003 spac=0.00025
+line x loc=$p_gate_edge+0.003 spac=0.00025
+line x loc=$x_max spac=0.0015
+
+# z-planes
+line z loc=$z_min spac=0.02
+line z loc=-0.15 spac=0.01
+line z loc=-0.02 spac=0.002
+line z loc=0 spac=0.0003 
+line z loc=0.05 spac=0.002
+line z loc=$z_sti spac=0.002
+line z loc=$z_mid spac=0.01
+line z loc=$z_depth spac=0.02
+
+# deposit sti hardmask layers
+deposit conformal material=oxide thickness=0.01
+deposit conformal material=nitride thickness=0.05
+
+# active area mask and hardmask nitride etch
+mask mask=active material=resist thickness=0.05
+etch directional material=nitride thickness=0.055
+export structure=$'output_root'_$'index'_01.str 
+strip material=resist
+
+# sti etch
+etch directional material=oxide thickness=0.015
+etch dry material=silicon thick=$sti_depth angle=$sti_angle
+export structure=$'output_root'_$'index'_02.str
+
+# sti liner oxidation
+diffuse dryo2 temperature=800 time=30
+export structure=$'output_root'_$'index'_03.str
+
+save name=sv_$'output_root'_$'index'_stiliner
+if.end # load_point 0
+
+if cond=($load_point = 1)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_stiliner
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 1)
+
+deposit conformal material=oxide thickness=0.15
+export structure=$'output_root'_$'index'_04.str
+
+# cmp planarization
+etch above=-0.018
+export structure=$'output_root'_$'index'_05.str
+
+# active hardmask nitride strip
+strip material=nitride
+export structure=$'output_root'_$'index'_06.str
+
+# wet etch the oxide underlayer
+etch wet material=oxide thickness=0.012
+export structure=$'output_root'_$'index'_07.str
+
+# grow a thermal oxide liner over the active area and in the trench
+diffuse dryo2 temperature=800 time=30
+export structure=$'output_root'_$'index'_08.str
+
+save name=sv_$'output_root'_$'index'_sti
+if.end # load_point 1
+
+if cond=($load_point = 2)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_sti
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 2)
+
+# etch and redeposit to avoid non-uniformity issues in the simulated oxide
+# sacrificial/scattering oxide 
+etch oxide thick = 0.0021 dry
+deposit directional material=oxide thickness=$t_ox_implant
+export structure=$'output_root'_$'index'_09.str
+
+# mask and perform pwell implant (for nmos transistor) before thermal drive
+deposit resist conformal mask="pwell" thickness=0.10
+implant boron energy=$pwell_energy dose=$pwell_dose tilt=7 rotation=22
+export structure=$'output_root'_$'index'_10.str
+strip material=resist
+
+# mask and perform nwell implant (for pmos transistsor) before thermal drive
+deposit resist conformal mask="nwell" thickness=0.10
+implant phosphorus energy=$nwell_energy dose=$nwell_dose tilt=7 rotation=22
+export structure=$'output_root'_$'index'_11.str
+strip material=resist
+
+# deep well diffusion
+diffuse time=$well_diff_time temp=$well_diff_temp
+export structure=$'output_root'_$'index'_12.str
+
+save name=sv_$'output_root'_$'index'_well
+if.end # load_point 2
+
+if cond=($load_point = 3)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_well
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 3)
+
+# vt implant for nmos transistor
+deposit resist conformal mask="pwell" thickness=0.1
+
+# nmos vt implant 
+implant boron energy=$nvt_energy dose=$nvt_dose tilt=7.0 rotation=22
+export structure=$'output_root'_$'index'_13.str
+
+strip material=resist
+
+# vt implant for pmos transistor
+deposit resist conformal mask="nwell" thickness=0.10
+
+# pmos vt implant
+implant phosphorus energy=$pvt_energy dose=$pvt_dose tilt=7.0 rotation=22
+export structure=$'output_root'_$'index'_14.str
+
+strip material=resist
+
+save name=sv_$'output_root'_$'index'_vt
+if.end # load_point 3
+
+if cond=($load_point = 4)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_vt
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 4)
+
+# remove implant oxide
+set thickness=$t_ox_implant*1.25
+etch wet material = oxide thick = $thickness
+export structure=$'output_root'_$'index'_15.str
+
+# simulate sacrificial gate oxide growth
+deposit material=oxide conformal thickness=$t_gox_sac
+export structure=$'output_root'_$'index'_16.str
+
+# poly gate deposition
+deposit conformal material=polysilicon thickness=0.041
+export structure=$'output_root'_$'index'_17.str
+
+# poly cmp
+etch above=-0.037
+export structure=$'output_root'_$'index'_18.str
+
+# deposit nitride hardmask and pattern (could be SADP, SAQP)
+deposit conformal material=nitride thickness=0.010
+deposit conformal material=resist mask="gate" thickness=0.05
+etch dry material=nitride thickness=0.012
+export structure=$'output_root'_$'index'_19.str
+strip material=resist
+
+# etch gate using nitride hardmask
+etch dry material=polysilicon thickness=0.05
+export structure=$'output_root'_$'index'_20.str
+
+# poly reoxidation (use deposited film instead of oxidation - could be ald)
+# first remove oxide on silicon to reduce oxide thickness at later implants
+set thickness=$t_gox_sac*1.25
+etch wet material=oxide thickness=$thickness
+deposit conformal material=oxide thickness=$t_ox_poly
+export structure=$'output_root'_$'index'_21.str
+
+save name=sv_$'output_root'_$'index'_polyreox
+if.end # load_point 4
+
+if cond=($load_point = 5)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_polyreox
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 5)
+
+# nmos halo implant
+deposit resist conformal mask="pwell" thickness=0.1 
+if cond=($mc_implant=1)
+  implant boron energy=$nhalo_energy dose=$nhalo_dose tilt=25 rotation=0 n.rot=4 \
+    montecarlo n.ion=$mc_n_ions
+else
+  # note: analytic implant does not capture the shadowing from the tilt
+  #       boron analytic implant with 25-degree tilt does not work at all
+  #         - use 10-degree tilt as an approximation
+  implant boron energy=$nhalo_energy dose=$nhalo_dose tilt=10 rotation=0 n.rot=4
+if.end
+export structure=$'output_root'_$'index'_22.str
+
+# nmos extension implant
+implant arsenic energy=$next_energy dose=$next_dose tilt=7 rotation=22 n.rot=4
+export structure=$'output_root'_$'index'_23.str
+strip material=resist
+
+# pmos halo implant
+deposit resist conformal mask="nwell" thickness=0.1
+if cond=($mc_implant=1)
+  implant phosphorus energy=$phalo_energy dose=$phalo_dose tilt=25 rotation=0 n.rot=4 \
+    montecarlo n.ion=$mc_n_ions
+else
+  # note: analytic implant does not capture the tilt
+  implant phosphorus energy=$phalo_energy dose=$phalo_dose tilt=25 rotation=0 n.rot=4
+if.end
+export structure=$'output_root'_$'index'_24.str
+
+# pmos extension implant
+implant bf2 energy=$pext_energy dose=$pext_dose tilt=7 rotation=22 n.rot=4
+export structure=$'output_root'_$'index'_25.str
+strip material=resist
+
+# extension anneal
+diffuse temp=$ext_diff_temp time=$ext_diff_time sec
+export structure=$'output_root'_$'index'_26.str 
+
+# extract annealed extension junction depths
+
+set x_extract=0.5*$iso_width+0.5*($x_max-0.5*$iso_width)
+extract name="ext_depth_n" xj material="silicon" mat.occno=1 junc.occno=1 x.val=-$x_extract
+extract name="ext_depth_p" xj material="silicon" mat.occno=1 junc.occno=1 x.val=$x_extract
+system echo "ext_depth_n: $ext_depth_n" >> $vp_resfile
+system echo "ext_depth_p: $ext_depth_p" >> $vp_resfile
+
+save name=sv_$'output_root'_$'index'_flash
+if.end # load_point 5
+
+if cond=($load_point = 6)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_flash
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 6)
+
+# spacer nitride deposition
+deposit conformal material=nitride thickness=$t_nit_spacer
+export structure=$'output_root'_$'index'_27.str
+
+# spacer nitride etch
+set thickness=$t_nit_spacer+$t_nit_spacer_oe
+etch dry material=nitride thickness=$thickness
+export structure=$'output_root'_$'index'_28.str
+
+# nmos s/d implantation
+deposit resist conformal mask="pwell" thickness=0.1
+implant arsenic energy=$nsd_energy dose=$nsd_dose tilt=7 rotation=22 n.rot=4 
+export structure=$'output_root'_$'index'_29.str
+strip material=resist
+
+# pmos s/d implantation
+deposit resist conformal mask="nwell" thickness=0.1
+implant bf2 energy=$psd_energy dose=$psd_dose tilt=7 rotation=22 n.rot=4
+export structure=$'output_root'_$'index'_30.str
+strip material=resist
+
+# s/d rapid thermal anneal
+diffuse temp=$sd_diff_temp time=$sd_diff_time sec
+export structure=$'output_root'_$'index'_31.str
+# === Deep S/D junction depth extractions (added) ===
+# Define spacer-edge locations at each side (gate edge + sidewall oxide + nitride spacer)
+set x_spacer_neg = $x_min + 0.5*$poly_width + $t_ox_poly + $t_nit_spacer
+set x_spacer_pos = $x_max - 0.5*$poly_width - $t_ox_poly - $t_nit_spacer
+
+# STI/active edge positions (already defined earlier)
+set x_mid_neg = 0.5*($n_sti_edge + $x_spacer_neg)
+set x_mid_pos = 0.5*($p_sti_edge + $x_spacer_pos)
+
+# Extract deep S/D junction depths
+extract name="sd_depth_n" xj material="silicon" mat.occno=1 junc.occno=1 x.val=$x_mid_neg
+extract name="sd_depth_p" xj material="silicon" mat.occno=1 junc.occno=1 x.val=$x_mid_pos
+
+# Log results
+system echo "sd_depth_n: $sd_depth_n" >> $vp_resfile
+system echo "sd_depth_p: $sd_depth_p" >> $vp_resfile
+
+save name=sv_$'output_root'_$'index'_sd
+if.end # load_point 6
+
+if cond=($load_point = 7)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_sd
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 7)
+
+# strip oxide
+set thickness=($t_gox_sac+$t_ox_poly) * 1.25
+etch dry material=oxide thickness=$thickness
+export structure=$'output_root'_$'index'_32.str
+
+# creation of silicide for contacts (fixed 1nm tolerance)
+# patterning is artificial ; actual process is self-aligned
+set x_nisi_min=(0.5*$iso_width+$nisi_to_iso_width)+0.001
+set x_nisi_max=(0.5*$iso_width+$iso_to_poly_width-$t_ox_poly-$t_nit_spacer)-0.001
+etch directional material=silicon thickness=0.004 between.x="-$x_nisi_max,-$x_nisi_min"
+etch directional material=silicon thickness=0.004 between.x="$x_nisi_min,$x_nisi_max"
+deposit directional material=NiSi thick=0.01 between.x="-$x_nisi_max,-$x_nisi_min"
+deposit directional material=NiSi thick=0.01 between.x="$x_nisi_min,$x_nisi_max"
+export structure=$'output_root'_$'index'_33.str
+
+# overcoat with oxide prior to cmp
+deposit conformal material=oxide thickness=0.10
+export structure=$'output_root'_$'index'_34.str
+
+# cmp to expose gate poly
+etch above=-0.031
+export structure=$'output_root'_$'index'_35.str
+
+# remove dummy gate
+strip material=polysilicon
+export structure=$'output_root'_$'index'_36.str
+
+# etch dummy gate oxide and poly sidewall oxide
+set thickness=max($t_gox_sac,$t_ox_poly)*1.25
+etch wet material=oxide thick=$thickness
+export structure=$'output_root'_$'index'_37.str
+
+# simulate high-k metal-gate stack deposition
+deposit conformal material=oxide thickness=$t_gox_sio2
+deposit conformal material=HfO2 thickness=$t_gox_hfo2
+deposit conformal material=TiN thickness=$t_tin
+deposit conformal material=TaN thickness=0.002
+export structure=$'output_root'_$'index'_38.str
+
+save name=sv_$'output_root'_$'index'_highk
+if.end # load_point 7
+
+if cond=($load_point = 8)
+  if cond=("$'load_file'" = "NONE" )
+    load name=sv_$'output_root'_$'index'_highk
+  else
+    load name="$load_file"
+  if.end
+if.end
+
+if cond=($load_point <= 8)
+
+# work function engineering
+
+# nmos uses thin TiN and thick Al
+deposit material=TiN thickness=-0.018 max
+deposit resist conformal mask="pwell" thickness=0.1
+etch material = TiN thickness = 0.005 wet
+export structure=$'output_root'_$'index'_39.str
+
+strip material=resist
+
+# nmos workfunction and pmos metal fill
+deposit conformal material=aluminium thickness=0.03
+export structure=$'output_root'_$'index'_40.str
+
+# simulate gate-metal cmp
+etch above=-0.026
+export structure=$'output_root'_$'index'_41.str
+
+# export final 1d structures
+
+# assume same silicon surface position for n and p; extract at x_max minus 1nm
+extract name="silicon_depth_a" thickness material="silicon" mat.occno=1 x.val=$x_max-0.001
+set silicon_surface=$z_depth-$silicon_depth_a*1e-4
+set z_channel=$silicon_surface+$z_channel_offset
+
+export 1d xdir z=$z_channel structure=$'output_root'_$'index'_1d_h_ch.str
+export 1d xdir z=$z_halo_depth structure=$'output_root'_$'index'_1d_h_halo.str
+
+export 1d x=$x_min structure=$'output_root'_$'index'_1d_v_ch_n.str
+export 1d x=$x_max structure=$'output_root'_$'index'_1d_v_ch_p.str
+export 1d x=$x_min+0.5*$poly_width+$t_ox_poly structure=$'output_root'_$'index'_1d_v_ext_n.str
+export 1d x=$x_max-0.5*$poly_width-$t_ox_poly structure=$'output_root'_$'index'_1d_v_ext_p.str
+
+# extract final physical dimensions
+
+extract name="channel_center_to_ext_n" xj material="silicon" mat.occno=1 junc.occno=1 y.val=$z_channel
+set leffj_n=2*$channel_center_to_ext_n
+set lext_n=0.5*$poly_width+$t_ox_poly-$channel_center_to_ext_n
+
+# note: assumes tisi recess extends below z_channel
+extract name="tisi_to_ext_p" xj material="silicon" mat.occno=4 junc.occno=1 y.val=$z_channel
+extract name="silicon_p_a" thickness material="Silicon" mat.occno=4 y.val=$z_channel
+set channel_center_to_ext_p=$silicon_p_a*1e-4-$tisi_to_ext_p
+set leffj_p=2*$channel_center_to_ext_p
+set lext_p=0.5*$poly_width+$t_ox_poly-$channel_center_to_ext_p
+
+# TiN width used to establish the metal gate length
+set z_tin=$silicon_surface-$t_gox_sio2-$t_gox_hfo2-0.5*$t_tin
+
+extract name="tin_width_n_a" thickness material="TiN" mat.occno=2 y.val=$z_tin
+set lmetal_n=2*$tin_width_n_a*1e-4
+set overlap_n=0.5*$lmetal_n-$channel_center_to_ext_n
+
+extract name="tin_width_p_a" thickness material="TiN" mat.occno=1 y.val=$z_tin
+set lmetal_p=2*$tin_width_p_a*1e-4
+set overlap_p=0.5*$lmetal_p-$channel_center_to_ext_p
+
+system echo "leffj_n: $leffj_n" >> $vp_resfile
+system echo "lext_n: $lext_n" >> $vp_resfile
+system echo "lmetal_n: $lmetal_n" >> $vp_resfile
+system echo "overlap_n: $overlap_n" >> $vp_resfile
+
+system echo "leffj_p: $leffj_p" >> $vp_resfile
+system echo "lext_p: $lext_p" >> $vp_resfile
+system echo "lmetal_p: $lmetal_p" >> $vp_resfile
+system echo "overlap_p: $overlap_p" >> $vp_resfile
+
+# save for use by victory mesh
+save name=$'output_root'_$'index'_final
+
+if.end # load_point 8
+
+system echo >> $vp_resfile
+system echo -n "end: " >> $vp_resfile
+system date >> $vp_resfile
+
+system rm -f results.final
+
+if.end # run_process
+
+##### end process #####
+
+##### start meshing #####
+
+# meshing device loop
+loop steps=2
+
+assign name=device c1="n" c2="p"
+
+set run_iv_device=0
+
+if cond=($device="n" & $run_iv_nmos=1)
+  set run_iv_device=1
+if.end
+
+if cond=($device="p" & $run_iv_pmos=1)
+  set run_iv_device=1
+if.end
+
+if cond=($run_iv_device=1)
+
+go victorymesh simflags="-P 4"
+load in="$'output_root'_$'index'_final"
+
+# replace high-k metal gate with aluminum and later specify workfunction
+material regions="TiN" value="Aluminum"
+material regions="TaN" value="Aluminum"
+material regions="Nisix" value="Aluminum"
+
+if cond=($device="n")
+  set x_min_crop=$x_min
+  set x_max_crop=$x_min+0.5*$iv_structure_width
+  crop from="$x_min_crop" to="$x_max_crop" 
+  mirror axes="-1x"
+  translate delta="$x_max,0,0"
+else
+  set x_min_crop=$x_max-0.5*$iv_structure_width
+  set x_max_crop=$x_max
+  crop from="$x_min_crop" to="$x_max_crop" 
+  mirror axes="+1x"
+  translate delta="$x_min,0,0"
+if.end
+
+remesh delaunay
+refine max.size=0.002 regions="*"
+refine max.size=0.0005 regions="hfo2"
+refine max.junction.size=0.0002 max.junction.distance.size=0.004 
+refine regions="silicon" interface.regions="sio2" max.interface.size=0.0002 max.interface.distance.size=0.001
+refine regions="sio2" interface.regions="silicon" max.interface.size=0.0002 max.interface.distance.size=0.001
+refine regions="silicon" interface.regions="aluminum" max.interface.size=0.0002 max.interface.distance.size=0.001
+
+save out="$'output_root'_$'index'_$'device'_meshed.str" mode=VICTORY
+
+if.end # run_iv_device
+
+# meshing device loop
+l.end
+
+##### end meshing #####
+
+##### start iv characterization #####
+
+# iv device loop
+loop steps=2
+
+assign name=device c1="n" c2="p"
+
+set run_iv_device=0
+
+if cond=($device="n" & $run_iv_nmos=1)
+  set wf=$n_wf
+  set ivt=$n_ivt 
+  set rcont=$n_rcont 
+  set vmult=1
+  set run_iv_device=1
+if.end
+
+if cond=($device="p" & $run_iv_pmos=1)
+  set wf=$p_wf
+  set ivt=$p_ivt 
+  set rcont=$p_rcont 
+  set vmult=-1
+  set run_iv_device=1
+if.end
+
+if cond=($run_iv_device=1)
+
+# bias loop
+loop steps=2
+
+assign name=bias c1="lin" c2="sat"
+
+set run_iv_bias=0
+
+if cond=($bias="lin" & $run_iv_linear=1)
+  set vdbias=$vlin
+  set vgmax=$vdd
+  set run_iv_bias=1
+if.end
+
+if cond=($bias="sat" & $run_iv_saturation=1)
+  set vdbias=$vdd
+  set vgmax=$vdd
+  set run_iv_bias=1
+if.end
+
+if cond=($run_iv_bias=1)
+
+set logfile="$'output_root'_$'index'_$'device'_$'bias'.log"
+set strfile_vg0="$'output_root'_$'index'_$'device'_$'bias'_vg0.str"
+set strfile_vgmax="$'output_root'_$'index'_$'device'_$'bias'_vgmax.str"
+set datfile="$'output_root'_$'index'_$'device'_$'bias'.dat"
+set resfile="$'output_root'_$'index'_$'device'_$'bias'.results"
+
+system rm -f $logfile $strfile_vg0 $strfile_vgmax $datfile $resfile
+system echo "index: $index" >> $resfile
+system echo "device: $device" >> $resfile
+system echo "bias: $bias" >> $resfile
+system echo >> $resfile
+system echo "structure width: $iv_structure_width" >> $resfile
+system echo "workfunction: $wf" >> $resfile
+system echo "contact resistance: $rcont" >> $resfile
+system echo "lifetime n0: $taun" >> $resfile
+system echo "lifetime p0: $taup" >> $resfile
+system echo "threshold current: $ivt*$vmult" >> $resfile
+system echo "drain bias: $vdbias*$vmult" >> $resfile
+system echo "minimum gate voltage: $vgmin*$vmult" >> $resfile
+system echo "maximum gate voltage: $vgmax*$vmult" >> $resfile
+system echo "drain bias step: $drain_bias_step" >> $resfile
+system echo "gate bias step: $gate_bias_step" >> $resfile
+system echo "gate ramp step: $gate_ramp_step" >> $resfile
+system echo >> $resfile
+system echo -n "start: " >> $resfile
+system date >> $resfile
+system echo >> $resfile
+
+go victorydevice simflags="-P 4"
+mesh infile="$'output_root'_$'index'_$'device'_meshed.str" verbose=3
+
+set x_drain_electrode=-1*0.5*$iv_structure_width+0.01
+set x_source_electrode=0.5*$iv_structure_width-0.01
+
+electrode name=drain coor.region=($x_drain_electrode,0,0)
+electrode name=source coor.region=($x_source_electrode,0,0)
+electrode name=gate coor.region=(0,-0.01,0)
+electrode name=substrate bottom
+
+contact name=gate workfunction=$wf
+contact name=source con.resist=$rcont
+contact name=drain con.resist=$rcont
+
+output band.param con.band val.band recomb impact e.velocity h.velocity \
+  u.srh e.mobility e.temp h.mobility h.temp charge u.bbt
+
+models cvt srh auger bgn print
+method newton trap maxtraps=8 c.tol=1.e-4 p.tol=1e-4
+material material=silicon taun0=$taun taup0=$taup
+
+solve initial
+solve previous
+
+# establish the drain bias
+solve name=drain vsubstrate=0 vgate=0 vdrain=0 vstep=$drain_bias_step*$vmult vfinal=$vdbias*$vmult
+
+# save the output structure with the drain biased and the gate at zero
+save outf=$strfile_vg0
+
+if cond=($vgmin>=0)
+  set stepmult=1
+else
+  set stepmult=-1
+if.end
+
+# establish the initial gate bias for gate ramp
+solve name=gate vsubstrate=0 vgate=0 vstep=$gate_bias_step*$stepmult*$vmult vfinal=$vgmin*$vmult
+
+# ramp the gate
+log outf=$logfile master
+solve name=gate vsubstrate=0 vgate=$vgmin*$vmult vstep=$gate_ramp_step*$vmult vfinal=$vgmax*$vmult
+log off
+
+# save the output structure with the drain biased and the gate at max
+save outf=$strfile_vgmax
+
+# extract device parameters
+go internal
+
+extract init infile="$'logfile'"
+extract name="Id_curve" curve(v."gate", abs(i."drain")) outfile="$'datfile'" 
+extract name="Vth_[V]" x.val from curve(v."gate", i."drain") where y.val=$vmult*$ivt datafile="$'resfile'" 
+extract name="Id_[uA/um]" y.val from curve(v."gate", 1e6*i."drain") where x.val=$vmult*$vgmax datafile="$'resfile'" 
+extract name="Ileak_[nA/um]" y.val from curve(v."gate", 1e9*i."drain") where x.val=0 datafile="$'resfile'"
+extract name="slope" grad from curve(v."gate", log10(abs(i."drain"))) where x.val=$'Vth_[V]' datafile="$'resfile'"
+extract name="ss_[mV/dec]" 1000/$'slope' datafile="$'resfile'"
+extract name="vtgmax" xintercept(maxslope(curve(v."gate", i."drain"))) datafile="$'resfile'"
+
+system echo -n "end: " >> $resfile
+system date >> $resfile
+
+if.end # run bias
+
+# bias loop
+l.end
+
+if.end # run device
+
+# iv device loop
+l.end
+
+##### end iv characterization #####
+
+quit
